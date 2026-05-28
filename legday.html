@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Leg Day Timer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a2e;
+      color: white;
+    }
+
+    .card {
+      background: rgba(0,0,0,0.85);
+      border-radius: 24px;
+      padding: 28px 20px;
+      width: 94vw;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    h1 { font-size: 1.5rem; letter-spacing: 1px; }
+
+    .phase-badge {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 4px 16px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .work-badge  { background: #22c55e33; color: #4ade80; border: 1px solid #22c55e; }
+    .rest-badge  { background: #eab30833; color: #facc15; border: 1px solid #eab308; }
+
+    .exercise-name {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 10px 0 4px;
+      min-height: 2rem;
+    }
+
+    .set-info {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+
+    /* Progress bar */
+    .progress-bar-bg {
+      background: rgba(255,255,255,0.15);
+      border-radius: 99px;
+      height: 8px;
+      margin: 10px 0 4px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      background: #22c55e;
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.5s ease;
+    }
+    .progress-label {
+      font-size: 0.7rem;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+
+    /* Countdown ring */
+    .timer-ring-container {
+      position: relative;
+      width: 160px;
+      height: 160px;
+      margin: 12px auto;
+    }
+    svg.ring { transform: rotate(-90deg); }
+    .ring-bg   { fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 10; }
+    .ring-fill {
+      fill: none;
+      stroke: #22c55e;
+      stroke-width: 10;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.9s linear, stroke 0.3s;
+    }
+    .ring-fill.rest-ring { stroke: #facc15; }
+    .ring-fill.pulse     { stroke: #ef4444; }
+
+    .countdown-number {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 3.5rem;
+      font-weight: 700;
+      font-family: monospace;
+    }
+    .countdown-number.pulse { color: #ef4444; animation: blink 0.5s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* Buttons */
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 18px;
+    }
+    button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 14px;
+      font-size: 0.95rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+      flex: 1;
+    }
+    button:active { transform: scale(0.95); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-start  { background: #22c55e; color: #fff; }
+    .btn-pause  { background: #eab308; color: #000; }
+    .btn-reset  { background: #ef4444; color: #fff; }
+
+    /* Exercise list */
+    .exercise-list {
+      margin-top: 20px;
+      text-align: left;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .ex-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      margin-bottom: 4px;
+      background: rgba(255,255,255,0.05);
+      font-size: 0.82rem;
+      transition: background 0.3s;
+    }
+    .ex-item.active  { background: rgba(34,197,94,0.2); border-left: 3px solid #22c55e; }
+    .ex-item.done    { opacity: 0.35; }
+    .ex-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    .ex-time { margin-left: auto; color: #64748b; font-size: 0.75rem; white-space: nowrap; }
+
+    .complete-msg {
+      font-size: 2rem;
+      margin: 20px 0 10px;
+      animation: popIn 0.4s ease;
+    }
+    @keyframes popIn { from{transform:scale(0.5);opacity:0} to{transform:scale(1);opacity:1} }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h1>🦵 Leg Day Workout</h1>
+
+  <div class="progress-bar-bg">
+    <div class="progress-bar-fill" id="progressBar" style="width:0%"></div>
+  </div>
+  <div class="progress-label" id="progressLabel">Exercise 1 of 13</div>
+
+  <span class="phase-badge work-badge" id="phaseBadge">▶ WORK</span>
+
+  <div class="exercise-name" id="exerciseName">Arm Circles</div>
+  <div class="set-info" id="setInfo">Work: 60s &nbsp;|&nbsp; Rest: 10s</div>
+
+  <div class="timer-ring-container">
+    <svg class="ring" width="160" height="160" viewBox="0 0 160 160">
+      <circle class="ring-bg"   cx="80" cy="80" r="70"/>
+      <circle class="ring-fill" cx="80" cy="80" r="70" id="ringFill"
+        stroke-dasharray="439.82"
+        stroke-dashoffset="0"/>
+    </svg>
+    <div class="countdown-number" id="countdownNum">60</div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-start" id="btnStart"  onclick="startTimer()">▶ Start</button>
+    <button class="btn-pause" id="btnPause"  onclick="pauseTimer()" disabled>⏸ Pause</button>
+    <button class="btn-reset" onclick="resetTimer()">↺ Reset</button>
+  </div>
+
+  <div class="exercise-list" id="exerciseList"></div>
+</div>
+
+<script>
+const workout = [
+  { name:"Arm Circles",       work:60, rest:10, section:"Warm-up" },
+  { name:"Jumping Jacks",     work:60, rest:10, section:"Warm-up" },
+  { name:"Light Stretching",  work:60, rest:10, section:"Warm-up" },
+  { name:"Dumbbell Squats",   work:40, rest:20, section:"Main" },
+  { name:"Reverse Lunges",    work:40, rest:20, section:"Main" },
+  { name:"Romanian Deadlift", work:40, rest:20, section:"Main" },
+  { name:"Calf Raises",       work:40, rest:20, section:"Main" },
+  { name:"Goblet Squat Hold", work:40, rest:20, section:"Main" },
+  { name:"Wall Sit",          work:40, rest:60, section:"Main" },
+  { name:"Dumbbell Squats",   work:60, rest:10, section:"Finisher" },
+  { name:"Towel Curl Hold",   work:60, rest:10, section:"Finisher" },
+  { name:"Dumbbell Squats",   work:60, rest:10, section:"Finisher" },
+  { name:"Towel Curl Hold",   work:60, rest: 0, section:"Finisher" },
+];
+
+const CIRCUMFERENCE = 2 * Math.PI * 70; // 439.82
+
+let idx = 0, timeLeft = workout[0].work, isRest = false, running = false, timer = null;
+
+// Build list
+function buildList() {
+  const list = document.getElementById("exerciseList");
+  list.innerHTML = "";
+  workout.forEach((ex, i) => {
+    const div = document.createElement("div");
+    div.className = "ex-item" + (i===0?" active":"");
+    div.id = "ex-" + i;
+    div.innerHTML = `
+      <div class="ex-num">${i+1}</div>
+      <span>${ex.name}<br><small style="color:#64748b">${ex.section}</small></span>
+      <span class="ex-time">${ex.work}s work / ${ex.rest}s rest</span>`;
+    list.appendChild(div);
+  });
+}
+
+function updateUI() {
+  const ex = workout[idx];
+  const total = isRest ? ex.rest : ex.work;
+
+  document.getElementById("exerciseName").textContent = isRest
+    ? "Rest — next: " + ex.name : ex.name;
+  document.getElementById("setInfo").textContent =
+    `Work: ${ex.work}s | Rest: ${ex.rest}s`;
+  document.getElementById("countdownNum").textContent = timeLeft;
+
+  const pct = (idx / workout.length) * 100;
+  document.getElementById("progressBar").style.width = pct + "%";
+  document.getElementById("progressLabel").textContent =
+    `Exercise ${idx+1} of ${workout.length}`;
+
+  // Ring animation
+  const ring = document.getElementById("ringFill");
+  const offset = CIRCUMFERENCE * (1 - timeLeft / total);
+  ring.style.strokeDashoffset = offset;
+
+  const num = document.getElementById("countdownNum");
+  const pulse = timeLeft <= 5 && timeLeft > 0;
+  num.className = "countdown-number" + (pulse ? " pulse" : "");
+
+  if (isRest) {
+    ring.className = "ring-fill rest-ring";
+    document.getElementById("phaseBadge").className = "phase-badge rest-badge";
+    document.getElementById("phaseBadge").textContent = "⏸ REST";
+  } else {
+    ring.className = "ring-fill" + (pulse ? " pulse" : "");
+    document.getElementById("phaseBadge").className = "phase-badge work-badge";
+    document.getElementById("phaseBadge").textContent = "▶ WORK";
+  }
+
+  // List highlight
+  workout.forEach((_, i) => {
+    const el = document.getElementById("ex-" + i);
+    if (!el) return;
+    el.className = "ex-item" + (i === idx ? " active" : i < idx ? " done" : "");
+  });
+
+  // Scroll active into view
+  const active = document.getElementById("ex-" + idx);
+  if (active) active.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+function tick() {
+  if (timeLeft > 1) {
+    timeLeft--;
+    if (timeLeft <= 5) speak(String(timeLeft));
+    updateUI();
+    return;
+  }
+  // Time's up
+  const ex = workout[idx];
+  if (!isRest && ex.rest > 0) {
+    isRest = true;
+    timeLeft = ex.rest;
+    speak("Rest");
+    updateUI();
+    return;
+  }
+  if (idx < workout.length - 1) {
+    idx++;
+    isRest = false;
+    timeLeft = workout[idx].work;
+    speak("Next " + workout[idx].name);
+    updateUI();
+    return;
+  }
+  // Done
+  running = false;
+  clearInterval(timer);
+  timer = null;
+  document.getElementById("btnStart").disabled = false;
+  document.getElementById("btnPause").disabled = true;
+  document.getElementById("exerciseName").textContent = "🎉 Workout Complete!";
+  document.getElementById("phaseBadge").className = "phase-badge work-badge";
+  document.getElementById("phaseBadge").textContent = "✅ DONE";
+  document.getElementById("countdownNum").textContent = "🏆";
+  speak("Workout complete. Well done!");
+}
+
+function startTimer() {
+  if (running) return;
+  running = true;
+  document.getElementById("btnStart").disabled = true;
+  document.getElementById("btnPause").disabled = false;
+  timer = setInterval(tick, 1000);
+  speak(workout[idx].name);
+  // Wake lock
+  if (navigator.wakeLock) navigator.wakeLock.request("screen").catch(()=>{});
+}
+
+function pauseTimer() {
+  running = false;
+  clearInterval(timer);
+  timer = null;
+  document.getElementById("btnStart").disabled = false;
+  document.getElementById("btnPause").disabled = true;
+}
+
+function resetTimer() {
+  pauseTimer();
+  idx = 0; isRest = false; timeLeft = workout[0].work;
+  buildList();
+  updateUI();
+}
+
+// Init
+buildList();
+updateUI();
+</script>
+</body>
+</html>
